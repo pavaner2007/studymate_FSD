@@ -1,4 +1,8 @@
 node_modules/
 .env
-uploads/
+uploads/notes/*
+uploads/pdfs/*
+!uploads/notes/.gitkeep
+!uploads/pdfs/.gitkeep
 *.log
+utils/
