@@ -11,9 +11,7 @@ function Navbar({ onMenuClick }) {
 
   const handleSearch = (e) => {
     e.preventDefault()
-    if (searchQuery.trim()) {
-      navigate(`/notes?search=${encodeURIComponent(searchQuery)}`)
-    }
+    if (searchQuery.trim()) navigate(`/notes?search=${encodeURIComponent(searchQuery)}`)
   }
 
   const handleLogout = () => {
@@ -25,10 +23,7 @@ function Navbar({ onMenuClick }) {
     <header className="sticky top-0 z-30 h-16 bg-white/80 backdrop-blur-md border-b border-slate-200">
       <div className="h-full px-4 lg:px-6 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <button
-            onClick={onMenuClick}
-            className="lg:hidden p-2 rounded-lg hover:bg-slate-100 text-slate-600"
-          >
+          <button onClick={onMenuClick} className="lg:hidden p-2 rounded-lg hover:bg-slate-100 text-slate-600">
             <Menu size={20} />
           </button>
           <form onSubmit={handleSearch} className="hidden md:block">
@@ -74,29 +69,15 @@ function Navbar({ onMenuClick }) {
                     <p className="font-medium text-slate-800">{user?.name}</p>
                     <p className="text-sm text-slate-500">{user?.email}</p>
                   </div>
-                  <Link
-                    to="/profile"
-                    onClick={() => setShowDropdown(false)}
-                    className="flex items-center gap-3 px-4 py-2 text-slate-600 hover:bg-slate-50 transition-colors"
-                  >
-                    <User size={18} />
-                    <span>Profile</span>
+                  <Link to="/profile" onClick={() => setShowDropdown(false)} className="flex items-center gap-3 px-4 py-2 text-slate-600 hover:bg-slate-50 transition-colors">
+                    <User size={18} /><span>Profile</span>
                   </Link>
-                  <Link
-                    to="/notes"
-                    onClick={() => setShowDropdown(false)}
-                    className="flex items-center gap-3 px-4 py-2 text-slate-600 hover:bg-slate-50 transition-colors"
-                  >
-                    <BookOpen size={18} />
-                    <span>My Notes</span>
+                  <Link to="/notes" onClick={() => setShowDropdown(false)} className="flex items-center gap-3 px-4 py-2 text-slate-600 hover:bg-slate-50 transition-colors">
+                    <BookOpen size={18} /><span>My Notes</span>
                   </Link>
                   <hr className="my-2 border-slate-100" />
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-50 w-full transition-colors"
-                  >
-                    <LogOut size={18} />
-                    <span>Sign Out</span>
+                  <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-50 w-full transition-colors">
+                    <LogOut size={18} /><span>Sign Out</span>
                   </button>
                 </div>
               </>

@@ -15,6 +15,12 @@ const chatSchema = new mongoose.Schema(
     messages: [messageSchema],
     pdfName: { type: String, default: null },
     pdfText: { type: String, default: null },
+    webUrl: { type: String, default: null },
+    webTitle: { type: String, default: null },
+    webContent: { type: String, default: null },
+    youtubeUrl: { type: String, default: null },
+    youtubeTitle: { type: String, default: null },
+    youtubeTranscript: { type: String, default: null },
   },
   { timestamps: true }
 )

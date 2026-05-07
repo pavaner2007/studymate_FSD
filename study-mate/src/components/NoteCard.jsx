@@ -1,24 +1,20 @@
 import { useState } from 'react'
-import { FileText, Download, Calendar, User, Loader2 } from 'lucide-react'
+import { FileText, Download, Calendar, User, Loader2, Bookmark } from 'lucide-react'
 import { downloadNote } from '../api/noteService'
+import { toggleBookmark } from '../api/userService'
 
-function NoteCard({ note }) {
+function NoteCard({ note, bookmarked = false, onBookmarkChange }) {
   const [downloading, setDownloading] = useState(false)
+  const [isBookmarked, setIsBookmarked] = useState(bookmarked)
+  const [bookmarking, setBookmarking] = useState(false)
 
   const getFileColor = (fileType) => {
-    const colors = {
-      PDF: 'bg-red-100 text-red-600',
-      PPT: 'bg-orange-100 text-orange-600',
-      DOC: 'bg-blue-100 text-blue-600',
-    }
+    const colors = { PDF: 'bg-red-100 text-red-600', PPT: 'bg-orange-100 text-orange-600', DOC: 'bg-blue-100 text-blue-600' }
     return colors[fileType] || 'bg-slate-100 text-slate-600'
   }
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric',
-    })
-  }
+  const formatDate = (dateString) =>
+    new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
   const handleDownload = async () => {
     setDownloading(true)
@@ -39,6 +35,19 @@ function NoteCard({ note }) {
     }
   }
 
+  const handleBookmark = async () => {
+    setBookmarking(true)
+    try {
+      const res = await toggleBookmark(note._id || note.id)
+      setIsBookmarked(res.data.bookmarked)
+      onBookmarkChange?.(note._id || note.id, res.data.bookmarked)
+    } catch (err) {
+      console.error('Bookmark failed', err)
+    } finally {
+      setBookmarking(false)
+    }
+  }
+
   const uploader = note.uploadedBy
 
   return (
@@ -47,10 +56,19 @@ function NoteCard({ note }) {
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-slate-800 truncate mb-1">{note.title}</h3>
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${getFileColor(note.fileType)}`}>
-            <FileText className="w-3 h-3" />
-            {note.fileType}
+            <FileText className="w-3 h-3" /> {note.fileType}
           </span>
         </div>
+        <button
+          onClick={handleBookmark}
+          disabled={bookmarking}
+          title={isBookmarked ? 'Remove bookmark' : 'Bookmark'}
+          className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
+            isBookmarked ? 'text-amber-500 hover:bg-amber-50' : 'text-slate-300 hover:text-amber-400 hover:bg-amber-50'
+          }`}
+        >
+          <Bookmark size={18} className={isBookmarked ? 'fill-amber-500' : ''} />
+        </button>
       </div>
 
       <div className="mb-3">
@@ -62,14 +80,8 @@ function NoteCard({ note }) {
       <p className="text-sm text-slate-500 mb-4 line-clamp-2">{note.description}</p>
 
       <div className="flex items-center justify-between text-xs text-slate-400 mb-4">
-        <div className="flex items-center gap-1">
-          <User size={14} />
-          <span>{uploader?.name || 'Unknown'}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Calendar size={14} />
-          <span>{formatDate(note.uploadedAt || note.createdAt)}</span>
-        </div>
+        <div className="flex items-center gap-1"><User size={14} /><span>{uploader?.name || 'Unknown'}</span></div>
+        <div className="flex items-center gap-1"><Calendar size={14} /><span>{formatDate(note.uploadedAt || note.createdAt)}</span></div>
       </div>
 
       <div className="flex items-center justify-between pt-3 border-t border-slate-100">

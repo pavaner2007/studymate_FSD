@@ -40,6 +40,7 @@ function App() {
           <Route path="chatbot" element={<Chatbot />} />
           <Route path="profile" element={<Profile />} />
         </Route>
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
   )

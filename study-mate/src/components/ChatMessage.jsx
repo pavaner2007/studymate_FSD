@@ -1,4 +1,5 @@
-import { User, Bot, FileText, Sparkles } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import { User, Bot, Sparkles } from 'lucide-react'
 
 function ChatMessage({ message, isTyping = false }) {
   const isUser = message.role === 'user'
@@ -21,7 +22,6 @@ function ChatMessage({ message, isTyping = false }) {
     )
   }
 
-  // System message (PDF upload confirmation)
   if (isSystem) {
     return (
       <div className="flex gap-3 animate-fadeIn">
@@ -53,11 +53,17 @@ function ChatMessage({ message, isTyping = false }) {
       {/* Message Bubble */}
       <div className={`max-w-[75%] ${isUser ? 'text-right' : ''}`}>
         <div className={`inline-block px-4 py-3 rounded-2xl ${
-          isUser 
-            ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white' 
+          isUser
+            ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white'
             : 'bg-white text-slate-800 shadow-card border border-slate-100'
         }`}>
-          <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+          {isUser ? (
+            <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+          ) : (
+            <div className="text-sm leading-relaxed prose prose-sm max-w-none prose-headings:font-bold prose-headings:text-slate-800 prose-p:text-slate-800 prose-p:my-1 prose-strong:text-slate-900 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-slate-800 prose-code:bg-slate-100 prose-code:px-1 prose-code:rounded prose-code:text-slate-800 prose-pre:bg-slate-100 prose-pre:rounded-xl prose-pre:p-3 prose-a:text-primary-600 prose-a:no-underline hover:prose-a:underline">
+              <ReactMarkdown>{message.content}</ReactMarkdown>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -32,6 +32,7 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    bookmarks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Note' }],
     avatar: {
       type: String,
       default: function () {

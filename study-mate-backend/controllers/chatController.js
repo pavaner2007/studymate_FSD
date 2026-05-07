@@ -1,14 +1,17 @@
 const fs = require('fs')
 const path = require('path')
+const axios = require('axios')
+const cheerio = require('cheerio')
 const Groq = require('groq-sdk')
 const pdfParse = require('pdf-parse')
+const { fetchYoutubeTranscript } = require('../utils/youtubeTranscript')
 const Chat = require('../models/Chat')
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
 const SYSTEM_PROMPT = `You are Study Mate AI, a helpful academic assistant for college students. 
 You help students understand their study materials, explain concepts clearly, and answer questions about their documents.
-When a PDF is provided, base your answers on its content. Be concise, accurate, and educational.`
+When a PDF or web page content is provided, base your answers strictly on that content. Be concise, accurate, and educational.`
 
 // @desc    Get all chats for current user
 // @route   GET /api/chat
@@ -16,7 +19,7 @@ When a PDF is provided, base your answers on its content. Be concise, accurate, 
 const getChats = async (req, res) => {
   try {
     const chats = await Chat.find({ user: req.user._id })
-      .select('-pdfText -messages')
+      .select('-pdfText -webContent -messages')
       .sort({ updatedAt: -1 })
     res.json(chats)
   } catch (error) {
@@ -29,7 +32,7 @@ const getChats = async (req, res) => {
 // @access  Private
 const getChatById = async (req, res) => {
   try {
-    const chat = await Chat.findOne({ _id: req.params.id, user: req.user._id }).select('-pdfText')
+    const chat = await Chat.findOne({ _id: req.params.id, user: req.user._id }).select('-pdfText -webContent')
     if (!chat) return res.status(404).json({ message: 'Chat not found' })
     res.json(chat)
   } catch (error) {
@@ -89,6 +92,130 @@ const uploadPdfToChat = async (req, res) => {
   }
 }
 
+// @desc    Scrape a web page and load content into chat
+// @route   POST /api/chat/:id/scrape
+// @access  Private
+const scrapeWebPage = async (req, res) => {
+  try {
+    const { url } = req.body
+    if (!url || !url.trim()) {
+      return res.status(400).json({ message: 'URL is required' })
+    }
+
+    // Validate URL format
+    let parsedUrl
+    try {
+      parsedUrl = new URL(url.trim())
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        return res.status(400).json({ message: 'Only HTTP and HTTPS URLs are supported' })
+      }
+    } catch {
+      return res.status(400).json({ message: 'Invalid URL format' })
+    }
+
+    const chat = await Chat.findOne({ _id: req.params.id, user: req.user._id })
+    if (!chat) return res.status(404).json({ message: 'Chat not found' })
+
+    // Fetch the web page
+    let html
+    try {
+      const response = await axios.get(url.trim(), {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+        timeout: 15000,
+        maxRedirects: 5,
+      })
+      html = response.data
+    } catch (err) {
+      return res.status(422).json({ message: `Could not fetch the web page: ${err.message}` })
+    }
+
+    // Parse and extract clean text using cheerio
+    const $ = cheerio.load(html)
+
+    // Remove unwanted elements
+    $('script, style, nav, footer, header, aside, iframe, noscript, svg, img, form, button, input, select, textarea, [class*="ad"], [id*="ad"], [class*="cookie"], [class*="popup"], [class*="modal"], [class*="banner"]').remove()
+
+    // Extract page title
+    const pageTitle = $('title').text().trim() || $('h1').first().text().trim() || parsedUrl.hostname
+
+    // Extract main content — try common content containers first
+    let mainText = ''
+    const contentSelectors = ['main', 'article', '[role="main"]', '.content', '#content', '.post', '.article', '.entry-content', 'body']
+
+    for (const selector of contentSelectors) {
+      const el = $(selector)
+      if (el.length) {
+        mainText = el.text()
+        if (mainText.trim().length > 200) break
+      }
+    }
+
+    // Clean up whitespace
+    const cleanText = mainText
+      .replace(/\t/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/ {2,}/g, ' ')
+      .trim()
+
+    if (cleanText.length < 100) {
+      return res.status(422).json({ message: 'Could not extract meaningful content from this page. The page may require JavaScript or login.' })
+    }
+
+    // Truncate to fit within token limits (keep first 12000 chars)
+    const truncatedContent = cleanText.slice(0, 12000)
+
+    // Save to chat
+    const systemMessage = {
+      role: 'system',
+      content: `🌐 Web page loaded: "${pageTitle}"\nURL: ${url.trim()}\nContent extracted successfully. You can now ask questions about this page.`,
+    }
+
+    chat.webUrl = url.trim()
+    chat.webTitle = pageTitle
+    chat.webContent = truncatedContent
+    // Clear PDF context if switching to web
+    chat.pdfName = null
+    chat.pdfText = null
+    chat.messages = chat.messages.filter(m => m.role !== 'system')
+    chat.messages.push(systemMessage)
+    if (chat.title === 'New Chat') chat.title = pageTitle.slice(0, 50)
+    await chat.save()
+
+    res.json({
+      webUrl: url.trim(),
+      webTitle: pageTitle,
+      contentLength: truncatedContent.length,
+      systemMessage: { ...systemMessage, _id: chat.messages.at(-1)._id },
+    })
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+// @desc    Remove web content from a chat
+// @route   DELETE /api/chat/:id/web
+// @access  Private
+const removeWebFromChat = async (req, res) => {
+  try {
+    const chat = await Chat.findOne({ _id: req.params.id, user: req.user._id })
+    if (!chat) return res.status(404).json({ message: 'Chat not found' })
+
+    chat.webUrl = null
+    chat.webTitle = null
+    chat.webContent = null
+    chat.messages = chat.messages.filter(m => m.role !== 'system')
+    await chat.save()
+
+    res.json({ message: 'Web content removed from chat' })
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
 // @desc    Send a message and get AI response
 // @route   POST /api/chat/:id/message
 // @access  Private
@@ -106,13 +233,18 @@ const sendMessage = async (req, res) => {
     if (chat.title === 'New Chat') chat.title = content.trim().slice(0, 50)
 
     const conversationMessages = chat.messages
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .filter(m => m.role === 'user' || m.role === 'assistant')
       .slice(-10)
-      .map((m) => ({ role: m.role, content: m.content }))
+      .map(m => ({ role: m.role, content: m.content }))
 
+    // Build system prompt with context (PDF or Web)
     let systemContent = SYSTEM_PROMPT
     if (chat.pdfText) {
       systemContent += `\n\nThe student has uploaded a PDF document titled "${chat.pdfName}". Here is its content:\n\n${chat.pdfText.slice(0, 6000)}`
+    } else if (chat.webContent) {
+      systemContent += `\n\nThe student has provided a web page titled "${chat.webTitle}" (${chat.webUrl}). Here is the extracted content:\n\n${chat.webContent.slice(0, 6000)}`
+    } else if (chat.youtubeTranscript) {
+      systemContent += `\n\nThe student has provided a YouTube video titled "${chat.youtubeTitle}". Here is its transcript:\n\n${chat.youtubeTranscript.slice(0, 6000)}`
     }
 
     const completion = await groq.chat.completions.create({
@@ -159,7 +291,7 @@ const removePdfFromChat = async (req, res) => {
 
     chat.pdfName = null
     chat.pdfText = null
-    chat.messages = chat.messages.filter((m) => m.role !== 'system')
+    chat.messages = chat.messages.filter(m => m.role !== 'system')
     await chat.save()
 
     res.json({ message: 'PDF removed from chat' })
@@ -168,4 +300,105 @@ const removePdfFromChat = async (req, res) => {
   }
 }
 
-module.exports = { getChats, getChatById, createChat, uploadPdfToChat, sendMessage, deleteChat, removePdfFromChat }
+// @desc    Fetch YouTube transcript and summarize with Groq
+// @route   POST /api/chat/:id/youtube
+// @access  Private
+const summarizeYoutube = async (req, res) => {
+  try {
+    const { url } = req.body
+    if (!url || !url.trim()) return res.status(400).json({ message: 'YouTube URL is required' })
+
+    const chat = await Chat.findOne({ _id: req.params.id, user: req.user._id })
+    if (!chat) return res.status(404).json({ message: 'Chat not found' })
+
+    // Fetch transcript using utility
+    let transcriptData
+    try {
+      transcriptData = await fetchYoutubeTranscript(url.trim())
+    } catch (err) {
+      return res.status(422).json({ message: err.message || 'Could not fetch transcript. The video may have captions disabled or is unavailable.' })
+    }
+
+    const { videoTitle, transcript: fullTranscript } = transcriptData
+    const truncatedTranscript = fullTranscript.slice(0, 12000)
+
+    // Summarize with Groq
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are Study Mate AI, an academic assistant. Summarize the following YouTube video transcript in a clear, structured way for a college student. Include: key topics covered, main points, and important takeaways. Use bullet points and sections.',
+        },
+        {
+          role: 'user',
+          content: `Please summarize this YouTube video transcript:\n\n${truncatedTranscript}`,
+        },
+      ],
+      temperature: 0.5,
+      max_tokens: 1024,
+    })
+
+    const summary = completion.choices[0]?.message?.content || 'Could not generate summary.'
+
+    const systemMessage = {
+      role: 'system',
+      content: `🎬 YouTube video loaded: "${videoTitle}"\nURL: ${url.trim()}\nTranscript extracted. You can now ask questions about this video.`,
+    }
+    const assistantMessage = {
+      role: 'assistant',
+      content: `## Video Summary\n\n${summary}`,
+    }
+
+    chat.youtubeUrl = url.trim()
+    chat.youtubeTitle = videoTitle
+    chat.youtubeTranscript = fullTranscript
+    // Clear other contexts
+    chat.pdfName = null
+    chat.pdfText = null
+    chat.webUrl = null
+    chat.webTitle = null
+    chat.webContent = null
+    chat.messages = chat.messages.filter(m => m.role !== 'system')
+    chat.messages.push(systemMessage)
+    chat.messages.push(assistantMessage)
+    if (chat.title === 'New Chat') chat.title = videoTitle.slice(0, 50)
+    await chat.save()
+
+    res.json({
+      youtubeUrl: url.trim(),
+      youtubeTitle: videoTitle,
+      systemMessage: { ...systemMessage, _id: chat.messages.at(-2)._id },
+      assistantMessage: { ...assistantMessage, _id: chat.messages.at(-1)._id },
+    })
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+// @desc    Remove YouTube video from a chat
+// @route   DELETE /api/chat/:id/youtube
+// @access  Private
+const removeYoutubeFromChat = async (req, res) => {
+  try {
+    const chat = await Chat.findOne({ _id: req.params.id, user: req.user._id })
+    if (!chat) return res.status(404).json({ message: 'Chat not found' })
+
+    chat.youtubeUrl = null
+    chat.youtubeTitle = null
+    chat.youtubeTranscript = null
+    chat.messages = chat.messages.filter(m => m.role !== 'system')
+    await chat.save()
+
+    res.json({ message: 'YouTube video removed from chat' })
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+module.exports = {
+  getChats, getChatById, createChat,
+  uploadPdfToChat, sendMessage, deleteChat, removePdfFromChat,
+  scrapeWebPage, removeWebFromChat,
+  summarizeYoutube, removeYoutubeFromChat,
+}
