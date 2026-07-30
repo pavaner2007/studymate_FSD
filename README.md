@@ -10,30 +10,30 @@ Study Mate is structured as a decoupled full-stack application containing a **Re
 
 ```mermaid
 graph TD
-    subgraph Client [React Frontend (Vite + Tailwind)]
-        A[Dashboard & UI Pages]
-        B[File Upload Component]
-        C[AI Chat Panel]
+    subgraph Client ["React Frontend (Vite + Tailwind)"]
+        A["Dashboard & UI Pages"]
+        B["File Upload Component"]
+        C["AI Chat Panel"]
     end
 
-    subgraph Server [Express Backend API]
-        D[JWT Auth Middleware]
-        E[Multer File Middleware]
-        F[Notes Controller]
-        G[Chat Controller]
-        H[ErrorHandler Middleware]
+    subgraph Server ["Express Backend API"]
+        D["JWT Auth Middleware"]
+        E["Multer File Middleware"]
+        F["Notes Controller"]
+        G["Chat Controller"]
+        H["ErrorHandler Middleware"]
     end
 
-    subgraph Database [Storage Layer]
-        I[(MongoDB / Mongoose)]
-        J[Local Disk Storage /uploads]
+    subgraph Database ["Storage Layer"]
+        I[("MongoDB / Mongoose")]
+        J["Local Disk Storage /uploads"]
     end
 
-    subgraph AI [LLM & Extractors]
-        K[Groq SDK / LLaMA-3.3-70b]
-        L[pdf-parse]
-        M[Cheerio Web Scraper]
-        N[youtube-transcript Utility]
+    subgraph AI ["LLM & Extractors"]
+        K["Groq SDK / LLaMA-3.3-70b"]
+        L["pdf-parse"]
+        M["Cheerio Web Scraper"]
+        N["youtube-transcript Utility"]
     end
 
     %% Interactions
@@ -41,7 +41,8 @@ graph TD
     B -->|2. Multipart Form-Data| E
     C -->|3. Messages / PDF / URLs| G
     
-    D --> F & G
+    D --> F
+    D --> G
     E -->|Uploads PDF/DOC| J
     
     F -->|Notes CRUD| I
