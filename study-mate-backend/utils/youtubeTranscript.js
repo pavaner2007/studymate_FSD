@@ -1,4 +1,5 @@
 const axios = require('axios')
+const { fetchTranscript } = require('youtube-transcript')
 
 const DEFAULT_HEADERS = {
   'User-Agent':
@@ -40,6 +41,19 @@ const parseXmlTranscript = (xml) => {
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+const fetchVideoTitle = async (videoId) => {
+  try {
+    const pageRes = await axios.get(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: DEFAULT_HEADERS,
+      timeout: 10000,
+    })
+    const match = pageRes.data.match(/<title>([^<]*)<\/title>/)
+    return match ? match[1].replace(/ - YouTube$/, '').trim() : `YouTube Video (${videoId})`
+  } catch {
+    return `YouTube Video (${videoId})`
+  }
 }
 
 // Method 1: YouTube Timedtext API (most reliable, no HTML parsing needed)
@@ -146,6 +160,43 @@ const fetchViaWatchPage = async (videoId, preferredLang = 'en') => {
 const fetchYoutubeTranscript = async (url, preferredLang = 'en') => {
   const videoId = extractVideoId(url)
   if (!videoId) throw new Error('Invalid YouTube URL')
+  const videoTitle = await fetchVideoTitle(videoId)
+  let lastError = null
+  const rememberError = (error) => {
+    if (!lastError) {
+      lastError = error
+      return
+    }
+
+    const message = error?.message?.toLowerCase() || ''
+    const current = lastError?.message?.toLowerCase() || ''
+    if ((message.includes('captcha') || message.includes('too many requests')) && !current.includes('captcha')) {
+      lastError = error
+    }
+  }
+
+  // Use the installed youtube-transcript package first. It handles YouTube's
+  // InnerTube captions flow better than the older timedtext-only approach.
+  try {
+    const items = await fetchTranscript(url, { lang: preferredLang })
+    const transcript = items
+      .map((item) => item.text)
+      .filter(Boolean)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    if (transcript.length >= 20) {
+      return {
+        videoId,
+        videoTitle,
+        transcript,
+        languageCode: items[0]?.lang || preferredLang,
+      }
+    }
+  } catch (error) {
+    rememberError(error)
+  }
 
   // Try Supadata API first if key is configured
   if (process.env.SUPADATA_API_KEY) {
@@ -165,24 +216,19 @@ const fetchYoutubeTranscript = async (url, preferredLang = 'en') => {
           languageCode: preferredLang,
         }
       }
-    } catch { /* fall through */ }
+    } catch (error) {
+      rememberError(error)
+    }
   }
 
   // Get video title from watch page (needed for method 1)
-  let videoTitle = `YouTube Video (${videoId})`
-  try {
-    const pageRes = await axios.get(`https://www.youtube.com/watch?v=${videoId}`, {
-      headers: DEFAULT_HEADERS, timeout: 10000,
-    })
-    const m = pageRes.data.match(/<title>([^<]*)<\/title>/)
-    if (m) videoTitle = m[1].replace(/ - YouTube$/, '').trim()
-  } catch { /* use default */ }
-
   // Try timedtext API first (most reliable)
   try {
     const result = await fetchViaTimedtextApi(videoId, preferredLang)
     return { videoId, videoTitle, transcript: result.transcript, languageCode: result.languageCode }
-  } catch { /* fall through */ }
+  } catch (error) {
+    rememberError(error)
+  }
 
   // Fallback: parse watch page HTML
   try {
@@ -193,9 +239,15 @@ const fetchYoutubeTranscript = async (url, preferredLang = 'en') => {
       transcript: result.transcript,
       languageCode: result.languageCode,
     }
-  } catch { /* fall through */ }
+  } catch (error) {
+    rememberError(error)
+  }
 
-  throw new Error('Could not fetch transcript. The video may have captions disabled or is private/unavailable.')
+  if (lastError?.message?.toLowerCase().includes('captcha') || lastError?.message?.toLowerCase().includes('too many requests')) {
+    throw new Error('YouTube is blocking transcript access from this server/IP because of too many requests or captcha. Try again later or configure SUPADATA_API_KEY for reliable transcript fetching.')
+  }
+
+  throw new Error(lastError?.message || 'Could not fetch transcript. The video may have captions disabled or is private/unavailable.')
 }
 
 module.exports = { fetchYoutubeTranscript, extractVideoId }
