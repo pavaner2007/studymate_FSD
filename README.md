@@ -1,6 +1,6 @@
 # Study Mate - College Learning & AI Study Assistant Platform
 
-Study Mate is a modern, responsive college learning platform that allows students to upload, browse, and download study notes within their verified college community. Additionally, it features an intelligent academic AI assistant powered by Groq's LLaMA 3.3 model, capable of performing on-demand document Q&A, real-time web page scraping, and YouTube video summarization.
+Study Mate is a modern, responsive college learning platform that allows students to upload, browse, and download study notes within their verified college community. Additionally, it features an intelligent academic AI assistant powered by Groq's LLMs (such as `openai/gpt-oss-120b`, `qwen/qwen3.8-27b`, or custom models), capable of performing on-demand document Q&A, real-time web page scraping, and YouTube video summarization.
 
 ---
 
@@ -30,16 +30,16 @@ graph TD
     end
 
     subgraph AI ["LLM & Extractors"]
-        K["Groq SDK / LLaMA-3.3-70b"]
+        K["Groq SDK / Configurable LLM (e.g. gpt-oss-120b)"]
         L["pdf-parse"]
         M["Cheerio Web Scraper"]
-        N["youtube-transcript Utility"]
+        N["youtube-transcript & Supadata Utility"]
     end
 
     %% Interactions
     A -->|1. REST Request + Auth Header| D
     B -->|2. Multipart Form-Data| E
-    C -->|3. Messages / PDF / URLs| G
+    C -->|3. Messages / PDF / URLs / YouTube| G
     
     D --> F
     D --> G
@@ -51,7 +51,7 @@ graph TD
     G -->|Reads PDF Text| L
     G -->|Scrapes URL| M
     G -->|Fetches Captions| N
-    G -->|System + Context System Prompt| K
+    G -->|System + Context Prompt| K
 ```
 
 ---
@@ -69,70 +69,62 @@ graph TD
 ### Backend API Server
 - **Runtime Environment**: [Node.js](https://nodejs.org/) & [Express](https://expressjs.com/)
 - **Database**: [MongoDB](https://www.mongodb.com/) via [Mongoose ODM](https://mongoosejs.com/)
-- **AI Core**: [Groq SDK](https://console.groq.com/) utilizing `llama-3.3-70b-versatile`
+- **AI Core**: [Groq SDK](https://console.groq.com/) utilizing configurable models (default: `openai/gpt-oss-120b`)
 - **File Parsing & Uploads**: [Multer](https://github.com/expressjs/multer) & [pdf-parse](https://github.com/info360/pdf-parse)
 - **Web Scraping**: [Cheerio](https://cheerio.js.org/) & [Axios](https://github.com/axios/axios)
-- **YouTube Transcripts**: [youtube-transcript](https://github.com/Kakulukian/youtube-transcript)
+- **YouTube Transcripts**: [youtube-transcript](https://github.com/Kakulukian/youtube-transcript) + fallback via Supadata API
 - **Security & Authorization**: [JSON Web Tokens (JWT)](https://jwt.io/) & [BcryptJS](https://github.com/dcodeIO/bcrypt.js)
-- **CORS Handling**: Dynamic origin lists supporting developer environments (localhost) and production subdomains (`.vercel.app`, `.onrender.com`).
+- **CORS Handling**: Dynamic origin lists supporting developer environments (localhost) and production deployments (`.vercel.app`, `.onrender.com`).
 
 ---
 
 ## 📁 Codebase Directory Structure
 
-### Frontend (`/study-mate`)
 ```
-study-mate/
-├── public/                  # Static assets
-├── src/
-│   ├── api/                 # API connection configurations and fetch calls
-│   ├── components/          # Reusable UI elements (Buttons, Skeletons, Modals)
-│   ├── context/             # React Contexts (AuthContext for user state)
-│   ├── data/                # Mock/Fallback data constants
-│   ├── layouts/             # MainLayout (Sidebar/BottomNav shell)
-│   ├── pages/               # Page Components:
-│   │   ├── Login.jsx        # Credentials input & email verification simulation
-│   │   ├── Dashboard.jsx    # Metrics and quick notes grid
-│   │   ├── Notes.jsx        # Notes browser with search and filter inputs
-│   │   ├── UploadNotes.jsx  # Drag & drop note publishing
-│   │   ├── Chatbot.jsx      # Multi-context AI chat dashboard
-│   │   └── Profile.jsx      # Personal settings, uploads, and bookmarks
-│   ├── App.jsx              # Main routing hub and route guard configuration
-│   ├── index.css            # Base Tailwind configurations and root styles
-│   └── main.jsx             # React DOM renderer
-├── index.html
-├── package.json
-└── vite.config.js
-```
-
-### Backend (`/study-mate-backend`)
-```
-study-mate-backend/
-├── config/
-│   └── db.js                # Database connection routine
-├── controllers/
-│   ├── authController.js    # Registration, token validation, account checking
-│   ├── userController.js    # Profile management, bookmark operations
-│   ├── noteController.js    # Notes uploading, searching, indexing, downloading
-│   └── chatController.js    # Groq API connections, PDF/Scraper/YouTube workflows
-├── middleware/
-│   ├── authMiddleware.js    # JWT payload checks & security guards
-│   ├── errorMiddleware.js   # 404 & 500 formatted JSON error structures
-│   └── uploadMiddleware.js  # Multer setup (Disk destination & file type filters)
-├── models/
-│   ├── User.js              # User profiles schema
-│   ├── Note.js              # Note details and file paths schema
-│   └── Chat.js              # Message logs and AI contexts schema
-├── routes/
-│   ├── authRoutes.js        # Auth endpoint routing
-│   ├── userRoutes.js        # Profile endpoint routing
-│   ├── noteRoutes.js        # Notes catalog routing
-│   └── chatRoutes.js        # AI engine routing
-├── uploads/                 # Storage for note attachments and PDFs
-│   ├── notes/
-│   └── pdfs/
-├── server.js                # Application bootstrapper
-└── package.json
+c:/FSD_Project/
+├── study-mate/                  # React + Vite Frontend
+│   ├── .env.example             # Frontend environment variables template
+│   ├── public/                  # Static assets
+│   ├── src/
+│   │   ├── api/                 # API connection configurations and fetch calls
+│   │   ├── components/          # Reusable UI elements (Buttons, Skeletons, Modals)
+│   │   ├── context/             # React Contexts (AuthContext for user state)
+│   │   ├── data/                # Mock/Fallback data constants
+│   │   ├── layouts/             # MainLayout (Sidebar/BottomNav shell)
+│   │   ├── pages/               # Page Components (Login, Dashboard, Notes, Upload, Chatbot, Profile)
+│   │   ├── App.jsx              # Main routing hub and route guard configuration
+│   │   ├── index.css            # Base Tailwind configurations and root styles
+│   │   └── main.jsx             # React DOM renderer
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.js
+│
+└── study-mate-backend/          # Node.js + Express Backend
+    ├── .env.example             # Backend environment variables template
+    ├── config/
+    │   └── db.js                # MongoDB connection routine
+    ├── controllers/
+    │   ├── authController.js    # Registration, token validation, account checking
+    │   ├── userController.js    # Profile management, bookmark operations
+    │   ├── noteController.js    # Notes uploading, searching, indexing, downloading
+    │   └── chatController.js    # Groq API connections, PDF/Scraper/YouTube workflows
+    ├── middleware/
+    │   ├── authMiddleware.js    # JWT payload checks & security guards
+    │   ├── errorMiddleware.js   # 404 & 500 formatted JSON error structures
+    │   └── uploadMiddleware.js  # Multer setup (Disk destination & file type filters)
+    ├── models/
+    │   ├── User.js              # User profiles schema
+    │   ├── Note.js              # Note details and file paths schema
+    │   └── Chat.js              # Message logs and AI contexts schema
+    ├── routes/
+    │   ├── authRoutes.js        # Auth endpoint routing
+    │   ├── userRoutes.js        # Profile endpoint routing
+    │   ├── noteRoutes.js        # Notes catalog routing
+    │   └── chatRoutes.js        # AI engine routing
+    ├── uploads/                 # Storage for note attachments and PDFs
+    ├── seed.js                  # Database seeder with sample users & notes
+    ├── server.js                # Application bootstrapper
+    └── package.json
 ```
 
 ---
@@ -148,10 +140,10 @@ Provides quick metrics regarding notes shared, download counters, and active AI 
 - Facilitates quick subject filtering (e.g. Computer Science, Mathematics, Physics, Chemistry, Biology, Engineering, Business, Economics, Literature, History).
 
 ### 3. Context-Aware AI Chat Engine
-The AI Chatbot allows users to create distinct threads, each of which can run in one of three modes:
+The AI Chatbot allows students to create distinct threads, each of which can run in multiple modes:
 - **Default Mode**: Acts as a general, conversational academic tutor.
-- **Document Q&A (PDF)**: Extracts raw text out of an uploaded PDF on the fly. The conversation scope is restricted strictly to answering questions based on that text.
-- **Web scraping Mode**: Users enter a website URL. The backend scrapes the DOM via Cheerio, removes boilerplate navigation/banners/scripts, and saves the text content as context.
+- **Document Q&A (PDF)**: Extracts raw text out of an uploaded PDF on the fly. The conversation scope is restricted strictly to answering questions based on that document.
+- **Web Scraping Mode**: Students enter a website URL. The backend scrapes the DOM via Cheerio, strips boilerplate tags, and saves the text content as context.
 - **YouTube Q&A**: Uses automated video transcripts to summarize video lectures instantly and answer complex theoretical queries about the lecture.
 
 ---
@@ -184,7 +176,7 @@ The AI Chatbot allows users to create distinct threads, each of which can run in
 ### AI Engine Endpoints (`/api/chat`)
 | Method | Endpoint | Authorization | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/` | JWT Protected | Lists user's active chats (omits massive prompt texts) |
+| `GET` | `/` | JWT Protected | Lists user's active chats |
 | `POST` | `/` | JWT Protected | Creates a new chat thread |
 | `GET` | `/:id` | JWT Protected | Retrieves messages and settings for a specific chat |
 | `DELETE` | `/:id` | JWT Protected | Deletes an entire chat thread |
@@ -202,53 +194,82 @@ The AI Chatbot allows users to create distinct threads, each of which can run in
 
 ### Prerequisite Checklist
 - **Node.js** (v18 or higher recommended)
-- **MongoDB** running locally or via a MongoDB Atlas Connection String
-- **Groq API Key** (obtainable from the [Groq Console](https://console.groq.com/))
+- **MongoDB** running locally (`mongodb://127.0.0.1:27017`) or MongoDB Atlas
+- **Groq API Key** (obtainable from [Groq Console](https://console.groq.com/))
+
+---
 
 ### 1. Database & Server Setup
-Navigate into the backend folder:
-```bash
-cd study-mate-backend
-```
 
-Install the dependencies:
-```bash
-npm install
-```
+1. Navigate into the backend directory:
+   ```bash
+   cd study-mate-backend
+   ```
 
-Create a `.env` configuration file in the backend root directory and configure the variables:
-```env
-PORT=5000
-MONGO_URI=mongodb://localhost:27017/studymate
-JWT_SECRET=your_strong_jwt_signing_secret_here
-JWT_EXPIRES_IN=7d
-GROQ_API_KEY=gsk_your_actual_groq_api_key_here
-CLIENT_URL=http://localhost:5173
-```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-Start the backend API server:
-```bash
-# Developer Hot Reload Mode
-npm run dev
+3. Create a `.env` file from the provided template:
+   ```bash
+   cp .env.example .env
+   ```
+   Configure your environment variables in `.env`:
+   ```env
+   PORT=5000
+   NODE_ENV=development
+   MONGO_URI=mongodb://127.0.0.1:27017/studymate
+   JWT_SECRET=your_super_secret_jwt_key
+   JWT_EXPIRES_IN=7d
+   GROQ_API_KEY=gsk_your_groq_api_key_here
+   GROQ_MODEL=openai/gpt-oss-120b
+   CLIENT_URL=http://localhost:5173
+   SUPADATA_API_KEY=your_optional_supadata_key_here
+   ```
 
-# Production Build Mode
-npm start
-```
-The API server will boot up at `http://localhost:5000`.
+4. Seed the database with sample notes and users:
+   ```bash
+   node seed.js
+   ```
+
+5. Start the backend API server:
+   ```bash
+   # Development with auto-reload
+   npm run dev
+
+   # Production mode
+   npm start
+   ```
+   The backend API will run on `http://localhost:5000`.
+
+---
 
 ### 2. Frontend Client Setup
-Open a new terminal window and navigate into the frontend folder:
-```bash
-cd study-mate
-```
 
-Install client dependencies:
-```bash
-npm install
-```
+1. Open a new terminal and navigate to the frontend directory:
+   ```bash
+   cd study-mate
+   ```
 
-Start the Vite development web server:
-```bash
-npm run dev
-```
-The client dashboard will compile and launch at `http://localhost:5173`.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. (Optional) Create `.env` from template:
+   ```bash
+   cp .env.example .env
+   ```
+
+4. Start the Vite development server:
+   ```bash
+   npm run dev
+   ```
+   The client application will run at `http://localhost:5173`.
+
+---
+
+### 🔑 Default Test Credentials (from `seed.js`)
+- **Email**: `alex.johnson@college.edu`
+- **Password**: `123456`
